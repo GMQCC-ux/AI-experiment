@@ -1,0 +1,99 @@
+clear clc
+%%输入规则库
+numRules = input('规则条数: ');
+rules = struct();
+for i = 1:numRules
+    fprintf('规则%d前提(空格分隔): ', i);
+    preStr = input('', 's');
+    preList = split(preStr);    %split是列向量
+    rules(i).pre = string(preList)';   %  '  表示转置为行向量
+    fprintf('规则%d结论: ', i);
+    conStr = input('', 's');
+    rules(i).con = string(conStr);
+end
+
+%%输入初始事实
+fprintf('初始事实(空格分隔): ');
+factStr = input('', 's');
+facts = string(split(factStr))';       % 转置为行向量
+
+%%选择推理方式
+fprintf('\n请选择推理方式：\n');
+fprintf('  1 - 正向推理\n');
+fprintf('  2 - 反向推理\n');
+choice = input('输入1或2: ');
+
+%%正向推理
+if choice == 1
+    fprintf('\n=== 正向推理开始 ===\n');
+    changed = true;
+    while changed
+        changed = false;
+        for i = 1:length(rules)
+            if all(ismember(rules(i).pre, facts)) && ~ismember(rules(i).con, facts)
+                facts = [facts, rules(i).con];
+                changed = true;
+                %fprintf('规则%d触发: %s -> %s\n', i, strjoin(rules(i).pre, ' '), rules(i).con);
+            end
+        end
+    end
+    fprintf('\n最终事实: %s\n', strjoin(facts, ', '));
+
+%%反向推理
+elseif choice == 2
+    goal = input('\n请输入目标假设: ', 's');
+    goal = string(goal);
+    fprintf('\n=== 反向推理开始 ===\n');
+    fprintf('目标: %s\n', goal);
+    
+    %初始 visited 使用空字符串数组
+    result = backward(goal, facts, rules, string.empty);
+    if result
+        fprintf('\n结论：目标 "%s" 可被证明。\n', goal);
+    else
+        fprintf('\n结论：目标 "%s" 无法从已知事实和规则证明。\n', goal);
+    end
+else
+    fprintf('无效选择。\n');
+end
+
+%%反向推理函数
+function proved = backward(goal, facts, rules, visited)
+    %如果目标已在事实库中
+    if ismember(goal, facts)
+        proved = true;
+        fprintf('  目标 "%s" 已在事实库中。\n', goal);
+        return;
+    end
+    %防止循环依赖
+    if ismember(goal, visited)
+        proved = false;
+        fprintf('  目标 "%s" 出现循环依赖，无法证明。\n', goal);
+        return;
+    end
+    visited = [visited, goal];
+    
+    %寻找能推出该目标的规则
+    for i = 1:length(rules)
+        if rules(i).con == goal
+            %fprintf('尝试规则%d: 如果 %s 则 %s\n', i, strjoin(rules(i).pre, ' & '), goal);
+            allPreProved = true;
+            for j = 1:length(rules(i).pre)
+                pre = rules(i).pre(j);
+                %fprintf('  需要证明前提: %s\n', pre);
+                if ~backward(pre, facts, rules, visited)
+                    allPreProved = false;
+                    fprintf('  前提 "%s" 无法证明，此规则失败。\n', pre);
+                    break;
+                end
+            end
+            if allPreProved
+                proved = true;
+                fprintf('规则%d 所有前提成立，结论 "%s" 得证。\n', i, goal);
+                return;
+            end
+        end
+    end
+    proved = false;
+    fprintf('无法找到任何规则能证明 "%s"。\n', goal);
+end
