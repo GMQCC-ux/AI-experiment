@@ -1,0 +1,86 @@
+%% 实验3：洗衣机洗涤时间模糊推理系统
+clear; close all; clc;
+
+%% 1. 创建Mamdani模糊推理系统，名字是WashingMachine（不是fis，fis是代码里面的标识，不是机器的名字）
+%% 参数全部成对（键值对），第一个是参数类型，第二个是值
+fis = mamfis('Name', 'WashingMachine');
+
+%% 2. 添加输入变量：污泥（dirt）
+%% addMF(机器使用变量名, 绑定的变量名, 函数类型, 三角形三点参数, 'Name', 模糊集名称)
+fis = addInput(fis, [0 100], 'Name', 'dirt');
+fis = addMF(fis, 'dirt', 'trimf', [0 0 50], 'Name', 'SD');   % 少
+fis = addMF(fis, 'dirt', 'trimf', [25 50 75], 'Name', 'MD'); % 中
+fis = addMF(fis, 'dirt', 'trimf', [50 100 100], 'Name', 'LD');% 多
+
+%% 3. 添加输入变量：油脂（grease）
+fis = addInput(fis, [0 100], 'Name', 'grease');
+fis = addMF(fis, 'grease', 'trimf', [0 0 50], 'Name', 'NG');   % 少
+fis = addMF(fis, 'grease', 'trimf', [25 50 75], 'Name', 'MG'); % 中
+fis = addMF(fis, 'grease', 'trimf', [50 100 100], 'Name', 'LG');% 多
+
+%% 4. 添加输出变量：洗涤时间（time）
+fis = addOutput(fis, [0 120], 'Name', 'time');
+fis = addMF(fis, 'time', 'trimf', [0 0 30], 'Name', 'VS');   % 很短
+fis = addMF(fis, 'time', 'trimf', [15 30 45], 'Name', 'S');  % 短
+fis = addMF(fis, 'time', 'trimf', [30 60 90], 'Name', 'M');  % 中等
+fis = addMF(fis, 'time', 'trimf', [60 90 120], 'Name', 'L'); % 长
+fis = addMF(fis, 'time', 'trimf', [90 120 120], 'Name', 'VL');% 很长
+
+%% 5. 定义模糊规则（字符串数组，清晰直观）
+ruleList = [
+    "dirt==SD & grease==NG => time=VS";
+    "dirt==SD & grease==MG => time=M";
+    "dirt==SD & grease==LG => time=L";
+    "dirt==MD & grease==NG => time=S";
+    "dirt==MD & grease==MG => time=M";
+    "dirt==MD & grease==LG => time=L";
+    "dirt==LD & grease==NG => time=M";
+    "dirt==LD & grease==MG => time=L";
+    "dirt==LD & grease==LG => time=VL"
+];
+fis = addRule(fis, ruleList);
+
+%% 6. 显示规则表（命令行）
+disp('模糊控制规则表：');
+showrule(fis)
+
+%% 7. 绘制隶属函数图
+figure('Name', '隶属函数图', 'NumberTitle', 'off');
+subplot(2,2,1);
+plotmf(fis, 'input', 1);
+title('输入变量"污泥"的隶属函数');
+xlabel('污泥含量'); ylabel('隶属度');
+grid on;
+
+subplot(2,2,2);
+plotmf(fis, 'input', 2);
+title('输入变量"油脂"的隶属函数');
+xlabel('油脂含量'); ylabel('隶属度');
+grid on;
+
+subplot(2,2,[3,4]);
+plotmf(fis, 'output', 1);
+title('输出变量"洗涤时间"的隶属函数');
+xlabel('洗涤时间'); ylabel('隶属度');
+grid on;
+
+%% 8. 绘制推理结果立体图
+figure('Name', '推理结果立体图', 'NumberTitle', 'off');
+gensurf(fis);
+title('洗涤时间随污泥与油脂变化的曲面');
+xlabel('污泥'); ylabel('油脂'); zlabel('洗涤时间');
+view(135, 30);
+
+%% 9. 给定输入 x0=60, y0=70 进行模糊推理
+input = [60, 70];
+output = evalfis(fis, input);
+fprintf('\n当污泥 = 60，油脂 = 70 时，模糊推理得到的洗涤时间为：%.2f 分钟\n', output);
+
+%% 10. 动态仿真环境（规则查看器和曲面查看器）
+try
+    fuzzy(fis);   
+catch
+    % 无
+end
+ruleview(fis);   % 规则查看器（动态仿真环境）
+surfview(fis);   % 曲面查看器
