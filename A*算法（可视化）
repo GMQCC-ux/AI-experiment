@@ -1,0 +1,190 @@
+%% A*迷宫寻路 （输出完整路径）
+clear;clc;close all;                             %清除变量，清除工作区，关闭窗口
+%% 输入迷宫尺寸
+n = input('请输入迷宫行数n：');
+m = input('请输入迷宫列数m：');
+disp('------------------------------');          %disp:display    fprintf功能相等，前者方便，后者可以格式化输出
+disp('请逐行输入迷宫，数字0=通路，1=障碍物，数字用空格隔开');
+maze = zeros(n,m);                               %zeros:建立一个全0矩阵，行是n，列是m ，只有zeros和ones
+for i = 1:n
+    str = input(sprintf('输入第%d行全部数字：',i),'s');           %input(..., 's')   先输出....里面的，然后输入，输入的东西当做s类型，赋值给str
+    row_data = str2num(str)                      % 2 在matlab中表示to 2前后分别是一个数据类型，这里就是str转num，生成一个行向量，输出是向量还是矩阵取决于是否只有一行，是不是向量还是表格元组等等取决于2后面是什么
+    maze(i,:) = row_data;                        % maze 是一个矩阵变量名，两个参数分别是（行，列），只不过 ：是通配符表示所有列，
+end
+disp('你输入的迷宫矩阵：');
+disp(maze);
+disp('------------------------------');
+%% 起止点输入
+start_r = input('输入起点行号：');
+start_c = input('输入起点列号：');
+start = [start_r, start_c];
+goal_r = input('输入终点行号：');
+goal_c = input('输入终点列号：');
+goal = [goal_r, goal_c];
+%% 合法性校验
+if start_r<1 || start_r>n || start_c<1 || start_c>m
+    error('起点坐标超出迷宫范围！');
+end
+if goal_r<1 || goal_r>n || goal_c<1 || goal_c>m
+    error('终点坐标超出迷宫范围！');
+end
+if maze(start_r,start_c)==1 || maze(goal_r,goal_c)==1
+    error('起点或终点是障碍物，无法通行！');
+end
+%% 两种启发函数运行，接收生成、扩展节点坐标
+[path1,expand1,gen1,t1,gen_nodes1,expand_nodes1] = Astar(maze,start,goal,1);
+[path2,expand2,gen2,t2,gen_nodes2,expand_nodes2] = Astar(maze,start,goal,2);
+%% 控制台输出结果
+disp('==================== 启发函数1：曼哈顿距离 ====================');
+if isempty(path1)
+    disp('无可行路径');
+else
+    disp('最短路径坐标序列：');
+    disp(path1);
+end
+disp(['扩展节点数：',num2str(expand1)]);
+disp(['生成节点总数：',num2str(gen1)]);
+disp(['运行耗时(秒)：',num2str(t1)]);
+
+disp('==================== 启发函数2：切比雪夫距离 ====================');
+if isempty(path2)
+    disp('无可行路径');
+else
+    disp('最短路径坐标序列：');
+    disp(path2);
+end
+disp(['扩展节点数：',num2str(expand2)]);
+disp(['生成节点总数：',num2str(gen2)]);
+disp(['运行耗时(秒)：',num2str(t2)]);
+%% 绘图
+figure('Name','A*迷宫寻路对比图');
+subplot(1,2,1);
+DrawMaze(maze,path1,start,goal,gen_nodes1,expand_nodes1);
+title('曼哈顿距离启发寻路结果');
+subplot(1,2,2);
+DrawMaze(maze,path2,start,goal,gen_nodes2,expand_nodes2);
+title('切比雪夫距离启发寻路结果');
+
+%% A*核心函数：全局父矩阵，输出节点坐标用于绘图
+function [path,expand_cnt,gen_cnt,time_cost,gen_nodes,expand_nodes] = Astar(maze,start,goal,h_type)
+    tic;
+    [rows,cols] = size(maze);
+    dirs = [-1,0;1,0;0,-1;0,1];
+    parent_x = zeros(rows,cols);
+    parent_y = zeros(rows,cols);
+    open_list = struct('x',{},'y',{},'g',{},'h',{},'f',{});
+    close_list = false(rows,cols);
+    expand_cnt = 0; gen_cnt = 1;
+    gen_nodes = [];    % 保存所有生成节点坐标
+    expand_nodes = [];  % 保存所有扩展节点坐标
+    sr = start(1); sc = start(2);
+    gr = goal(1); gc = goal(2);
+    h0 = CalcH(sr,sc,gr,gc,h_type);
+    open_list(1) = struct('x',sr,'y',sc,'g',0,'h',h0,'f',h0);
+    parent_x(sr,sc) = 0; parent_y(sr,sc) = 0;
+    gen_nodes = [gen_nodes; sr, sc]; % 起点属于生成节点
+    while ~isempty(open_list)
+        f_arr = [open_list.f];
+        [~,min_idx] = min(f_arr);
+        curr = open_list(min_idx);
+        open_list(min_idx) = [];
+        cr = curr.x; cc = curr.y;
+        if close_list(cr,cc)
+            continue;
+        end
+        close_list(cr,cc) = true;
+        expand_cnt = expand_cnt + 1;
+        expand_nodes = [expand_nodes; cr, cc]; % 记录扩展节点
+        % 到达终点，回溯路径
+        if cr == gr && cc == gc
+            path = [];
+            tr = gr; tc = gc;
+            while true
+                path = [tr,tc; path];
+                pr = parent_x(tr,tc);
+                pc = parent_y(tr,tc);
+                if pr == 0 && pc == 0
+                    break;
+                end
+                tr = pr; tc = pc;
+            end
+            time_cost = toc;
+            return;
+        end
+        % 遍历四邻域
+        for d = 1:4
+            nr = cr + dirs(d,1);
+            nc = cc + dirs(d,2);
+            if nr<1||nr>rows||nc<1||nc>cols
+                continue;
+            end
+            if maze(nr,nc)==1 || close_list(nr,nc)
+                continue;
+            end
+            new_g = curr.g + 1;
+            new_h = CalcH(nr,nc,gr,gc,h_type);
+            new_f = new_g + new_h;
+            existIdx = find([open_list.x]==nr & [open_list.y]==nc,1);
+            if isempty(existIdx)
+                gen_cnt = gen_cnt + 1;
+                open_list(end+1) = struct('x',nr,'y',nc,'g',new_g,'h',new_h,'f',new_f);
+                parent_x(nr,nc) = cr;
+                parent_y(nr,nc) = cc;
+                gen_nodes = [gen_nodes; nr, nc]; % 新增生成节点记录
+            else
+                if new_g < open_list(existIdx).g
+                    open_list(existIdx).g = new_g;
+                    open_list(existIdx).f = new_f;
+                    parent_x(nr,nc) = cr;
+                    parent_y(nr,nc) = cc;
+                end
+            end
+        end
+    end
+    path = [];
+    time_cost = toc;
+end
+%% 启发函数
+function h = CalcH(x1,y1,x2,y2,type)
+    dx = abs(x1-x2);
+    dy = abs(y1-y2);
+    if type == 1
+        h = dx + dy;
+    else
+        h = max(dx, dy);
+    end
+end
+function DrawMaze(maze,path,start,goal,gen_nodes,expand_nodes)
+    imshow(1-maze);                                       % imshow 默认显示图片时，数值 0 显示为黑色，数值 1 显示为白色。要让路显示出来，所以用1-原颜色
+    colormap(gray); hold on; axis equal;                  % colormap(gray)  设置颜色映射为灰度图。hold on 保持当前图像，允许在上面继续绘制新的图形元素。axis equal 让坐标轴的单位长度相等。
+                                                                
+    [rows,cols] = size(maze);       
+    grid_w = 1;
+    grid_h = 1;
+    % 扩展节点：整块填充浅蓝色方格，和白色背景、红点、黄线完全区分
+    if ~isempty(expand_nodes)
+        for i = 1:size(expand_nodes,1)
+            x_col = expand_nodes(i,2); 
+            y_row = expand_nodes(i,1);
+            rectangle('Position',[x_col-0.5, y_row-0.5, grid_w, grid_h],'FaceColor','c','EdgeColor','none');
+        end
+    end
+    % 生成节点：深紫红色实心圆点，不与浅蓝格子、黄线混淆
+    h_gen = [];
+    if ~isempty(gen_nodes)
+        h_gen = plot(gen_nodes(:,2),gen_nodes(:,1),'m.','MarkerSize',40);
+    end
+    % 起点橙色空心大圆，终点深红色空心大圆，避开前面两种主色
+    h_start = plot(start(2),start(1),'o','Color',[1 0.6 0],'MarkerSize',12,'LineWidth',2);
+    h_goal = plot(goal(2),goal(1),'o','Color',[0.8 0 0],'MarkerSize',12,'LineWidth',2);
+    % 最优路径：亮黄色粗线，对比度极强
+    h_path = [];
+    if ~isempty(path)
+        h_path = plot(path(:,2),path(:,1),'y-','LineWidth',4);
+    else
+        text(2,2,'无可行路径','Color','r','FontSize',16);
+    end
+    % 图例匹配绘图句柄
+    legend([h_start,h_goal,h_gen,h_path],{'起点(橙色空心圆)','终点(深红空心圆)','生成节点(紫实心点)','最优路径(亮黄线)'},'Location','best');
+    hold off;
+end
